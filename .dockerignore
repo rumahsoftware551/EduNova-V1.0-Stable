@@ -1,0 +1,13 @@
+.git
+.env.production
+backups/*
+docs/*.docx
+docs/*.pdf
+**/node_modules
+**/vendor
+source/frontend/dist
+source/backend/storage/logs/*
+source/backend/storage/framework/cache/data/*
+source/backend/storage/framework/sessions/*
+source/backend/storage/framework/views/*
+*.zip

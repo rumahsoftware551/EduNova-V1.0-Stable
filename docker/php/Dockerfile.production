@@ -1,0 +1,66 @@
+FROM composer:2 AS vendor
+
+WORKDIR /app
+COPY source/backend/composer.json ./composer.json
+RUN composer install \
+    --no-dev \
+    --prefer-dist \
+    --no-interaction \
+    --no-progress \
+    --no-scripts \
+    --optimize-autoloader
+
+COPY source/backend/ /app/
+RUN composer dump-autoload \
+    --no-dev \
+    --no-interaction \
+    --no-scripts \
+    --optimize \
+    --classmap-authoritative
+
+FROM php:8.4-apache-bookworm
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        curl \
+        libpq-dev \
+        libzip-dev \
+        libonig-dev \
+        unzip \
+        $PHPIZE_DEPS \
+    && docker-php-ext-install -j"$(nproc)" pdo_pgsql bcmath mbstring zip opcache \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    && a2enmod rewrite headers expires \
+    && apt-get purge -y --auto-remove $PHPIZE_DEPS \
+    && rm -rf /var/lib/apt/lists/* /tmp/pear
+
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf \
+    && sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+
+WORKDIR /var/www/html
+
+COPY source/backend/ /var/www/html/
+COPY --from=vendor /app/vendor /var/www/html/vendor
+COPY docker/php/opcache.ini /usr/local/etc/php/conf.d/99-edunova-opcache.ini
+COPY docker/php/php-production.ini /usr/local/etc/php/conf.d/98-edunova-production.ini
+COPY docker/php/entrypoint.sh /usr/local/bin/edunova-entrypoint
+
+RUN chmod +x /usr/local/bin/edunova-entrypoint \
+    && mkdir -p \
+        storage/app/public \
+        storage/framework/cache/data \
+        storage/framework/sessions \
+        storage/framework/views \
+        storage/logs \
+        bootstrap/cache \
+    && rm -rf public/storage \
+    && ln -s ../storage/app/public public/storage \
+    && chown -R www-data:www-data storage bootstrap/cache
+
+EXPOSE 80
+
+ENTRYPOINT ["edunova-entrypoint"]
+CMD ["apache2-foreground"]

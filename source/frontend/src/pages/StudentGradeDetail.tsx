@@ -1,0 +1,20 @@
+import { useEffect, useState } from 'react'
+import { useParams } from 'react-router'
+import { Award, CheckCircle2, CircleDashed, FileCheck2, Trophy } from 'lucide-react'
+import AppShell from '@/components/layout/AppShell'
+import { Badge, Card, Progress } from '@/components/ui'
+import { gradeApi, type StudentGradeDetail as Detail } from '@/features/grades/api'
+const fmt=(n:number|null|undefined)=>n==null?'—':n.toFixed(1)
+export default function StudentGradeDetail(){
+ const {classroomId}=useParams();const [data,setData]=useState<Detail|null>(null)
+ useEffect(()=>{gradeApi.student.get(Number(classroomId)).then(r=>setData(r.data))},[classroomId])
+ if(!data)return <AppShell title="Nilai"><Card className="h-56 animate-pulse"/></AppShell>
+ return <AppShell title={data.classroom.subject?.name||'Nilai'}>
+  <div className="mb-6"><div className="flex items-center gap-2"><Badge tone={data.published?'green':'slate'}>{data.published?'Final':'Progres sementara'}</Badge><span className="text-xs text-slate-400">{data.classroom.class_group?.name}</span></div><h2 className="mt-3 text-2xl font-semibold">{data.classroom.subject?.name}</h2><p className="mt-1 text-sm text-slate-500">Bobot tugas {data.settings.assignment_weight}% • quiz {data.settings.quiz_weight}% • KKM {data.settings.passing_grade}</p></div>
+  <div className="grid gap-4 lg:grid-cols-[1.1fr_.9fr]"><div className="space-y-4"><Card className="p-5"><h3 className="font-semibold">Komponen nilai</h3><div className="mt-5 space-y-5"><Bar label="Rata-rata tugas" value={data.progress?.assignment_average??null} icon={<FileCheck2 size={17}/>}/><Bar label="Rata-rata quiz" value={data.progress?.quiz_average??null} icon={<Trophy size={17}/>}/><Bar label="Progress materi" value={data.progress?.material_progress??0} icon={<CircleDashed size={17}/>}/></div>{(data.progress?.missing_count??0)>0&&<p className="mt-5 rounded-xl bg-amber-50 p-3 text-xs text-amber-700">{data.progress?.missing_count} komponen penilaian sudah lewat jadwal dan belum memiliki nilai.</p>}</Card></div>
+   <Card className={`p-6 ${data.published?'border-blue-100 bg-gradient-to-br from-white to-blue-50/60':''}`}><div className="grid h-12 w-12 place-items-center rounded-2xl bg-blue-600 text-white"><Award size={21}/></div><p className="mt-5 text-xs font-semibold uppercase tracking-[.14em] text-slate-400">Nilai akhir</p>{data.final_grade?<><div className="mt-2 flex items-end gap-3"><span className="text-5xl font-semibold tracking-tight">{data.final_grade.final_score.toFixed(1)}</span><Badge className="mb-1 text-base">{data.final_grade.letter_grade}</Badge></div><div className="mt-5 flex items-center gap-2 rounded-xl bg-white/80 p-3 text-sm"><CheckCircle2 size={18} className={data.final_grade.result_status==='passed'?'text-emerald-600':'text-amber-500'}/>{data.final_grade.result_status==='passed'?'Capaian memenuhi KKM.':'Nilai masih di bawah KKM.'}</div><div className="mt-5 grid grid-cols-2 gap-2"><Mini label="Tugas" value={fmt(data.final_grade.assignment_average)}/><Mini label="Quiz" value={fmt(data.final_grade.quiz_average)}/><Mini label="Adjustment" value={`${data.final_grade.adjustment>=0?'+':''}${fmt(data.final_grade.adjustment)}`}/><Mini label="KKM" value={fmt(data.settings.passing_grade)}/></div></>:<div className="mt-3"><p className="text-3xl font-semibold text-slate-300">Belum dipublish</p><p className="mt-3 text-sm leading-6 text-slate-500">Guru belum mempublikasikan nilai akhir. Nilai komponen di sebelah kiri masih dapat berubah selama proses pembelajaran.</p></div>}</Card>
+  </div>
+ </AppShell>
+}
+function Bar({label,value,icon}:{label:string;value:number|null;icon:React.ReactNode}){return <div><div className="mb-2 flex items-center justify-between"><span className="flex items-center gap-2 text-sm text-slate-600">{icon}{label}</span><span className="font-semibold">{value==null?'—':`${value.toFixed(1)}%`}</span></div><Progress value={value??0}/></div>}
+function Mini({label,value}:{label:string;value:string}){return <div className="rounded-xl bg-white p-3"><p className="text-[10px] text-slate-400">{label}</p><p className="mt-1 font-semibold">{value}</p></div>}

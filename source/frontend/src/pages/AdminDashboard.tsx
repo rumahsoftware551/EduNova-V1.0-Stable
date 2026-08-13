@@ -1,0 +1,16 @@
+import { useEffect,useState,type ReactNode } from 'react'
+import { BookOpen, GraduationCap, School, Users, UserRoundCheck } from 'lucide-react'
+import { Link } from 'react-router'
+import AppShell from '@/components/layout/AppShell'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { SectionTitle } from '@/components/shared/SectionTitle'
+import { Badge, Button, Card, Progress } from '@/components/ui'
+import { academicApi,type Overview } from '@/features/academic/api'
+
+export default function AdminDashboard(){
+ const [o,setO]=useState<Overview|null>(null)
+ useEffect(()=>{academicApi.overview().then(r=>setO(r.data)).catch(()=>{})},[])
+ return <AppShell title="Ringkasan Admin"><PageHeader eyebrow="School overview • Phase 04" title="Operasional EduNova" description="Kelola fondasi akademik sekolah sebelum membangun Digital Classroom." action={<Link to="/admin/academic" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"><GraduationCap size={16}/>Master Akademik</Link>}/><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Kpi icon={<Users/>} n={String(o?.students??'—')} t="Total siswa" delta="Database"/><Kpi icon={<UserRoundCheck/>} n={String(o?.teachers??'—')} t="Guru aktif" delta="Database"/><Kpi icon={<BookOpen/>} n={String(o?.subjects??'—')} t="Mata pelajaran" delta={`${o?.majors??0} jurusan`}/><Kpi icon={<School/>} n={String(o?.classes??'—')} t="Rombel aktif" delta={`${o?.academic_years??0} TA`}/></div><div className="mt-7 grid gap-5 xl:grid-cols-[1.45fr_.55fr]"><Card className="p-5"><SectionTitle eyebrow="Phase 04" title="Fondasi akademik sudah aktif" action={<Badge>Master Data</Badge>}/><div className="mt-5 grid gap-3 sm:grid-cols-2"><Feature t="Tahun ajaran & semester"/><Feature t="Jurusan & rombel"/><Feature t="Mata pelajaran"/><Feature t="Guru & siswa"/><Feature t="Enrollment siswa"/><Feature t="Penugasan guru"/></div></Card><Card className="p-5"><SectionTitle eyebrow="Readiness" title="Menuju Digital Classroom"/><div className="space-y-5"><Health l="Authentication" v="100%" w={100}/><Health l="Master akademik" v="100%" w={100}/><Health l="Classroom" v="Phase 05" w={10}/><Health l="Assessment" v="Phase 06–08" w={5}/></div></Card></div></AppShell>}
+function Kpi({icon,n,t,delta}:{icon:ReactNode,n:string,t:string,delta:string}){return <Card className="p-5"><div className="flex items-start justify-between"><div className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600">{icon}</div><span className="text-[11px] font-medium text-blue-600">{delta}</span></div><p className="mt-5 text-2xl font-semibold tracking-tight">{n}</p><p className="mt-1 text-xs text-slate-500">{t}</p></Card>}
+function Feature({t}:{t:string}){return <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3 text-sm font-medium text-slate-700">✓ {t}</div>}
+function Health({l,v,w}:{l:string,v:string,w:number}){return <div><div className="flex justify-between text-xs"><span className="text-slate-500">{l}</span><b className="font-semibold text-slate-700">{v}</b></div><Progress value={w} className="mt-2"/></div>}
