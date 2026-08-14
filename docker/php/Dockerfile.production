@@ -1,7 +1,86 @@
-FROM composer:2 AS vendor
+FROM php:8.4-apache-bookworm
 
-WORKDIR /app
-COPY source/backend/composer.json ./composer.json
+LABEL org.opencontainers.image.title="EduNova Backend"
+LABEL org.opencontainers.image.version="1.0.0"
+
+ENV APP_ENV=production
+ENV COMPOSER_ALLOW_SUPERUSER=1
+
+WORKDIR /var/www/html
+
+
+# ============================================================
+# SYSTEM DEPENDENCIES
+# ============================================================
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        curl \
+        git \
+        unzip \
+        zip \
+        libpq-dev \
+        libzip-dev \
+        libonig-dev \
+        $PHPIZE_DEPS \
+    && docker-php-ext-install -j"$(nproc)" \
+        pdo_pgsql \
+        bcmath \
+        mbstring \
+        zip \
+        opcache \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    && a2enmod rewrite headers expires \
+    && apt-get purge -y --auto-remove $PHPIZE_DEPS \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# ============================================================
+# COMPOSER
+# ============================================================
+
+COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
+
+
+# ============================================================
+# PHP CONFIGURATION
+# ============================================================
+
+COPY docker/php/php-production.ini \
+    /usr/local/etc/php/conf.d/99-edunova-production.ini
+
+COPY docker/php/opcache.ini \
+    /usr/local/etc/php/conf.d/98-edunova-opcache.ini
+
+
+# ============================================================
+# APACHE CONFIGURATION
+# Laravel public directory must be DocumentRoot.
+# ============================================================
+
+RUN sed -ri \
+    -e 's!/var/www/html!/var/www/html/public!g' \
+    /etc/apache2/sites-available/*.conf \
+    /etc/apache2/apache2.conf \
+    /etc/apache2/conf-available/*.conf
+
+RUN printf '%s\n' \
+    '<Directory /var/www/html/public>' \
+    '    Options FollowSymLinks' \
+    '    AllowOverride All' \
+    '    Require all granted' \
+    '</Directory>' \
+    > /etc/apache2/conf-available/edunova.conf \
+    && a2enconf edunova
+
+
+# ============================================================
+# COMPOSER DEPENDENCIES
+# ============================================================
+
+COPY source/backend/composer.json /var/www/html/composer.json
+
 RUN composer install \
     --no-dev \
     --prefer-dist \
@@ -10,7 +89,18 @@ RUN composer install \
     --no-scripts \
     --optimize-autoloader
 
-COPY source/backend/ /app/
+
+# ============================================================
+# COPY LARAVEL SOURCE
+# ============================================================
+
+COPY source/backend/ /var/www/html/
+
+
+# ============================================================
+# OPTIMIZE AUTOLOADER
+# ============================================================
+
 RUN composer dump-autoload \
     --no-dev \
     --no-interaction \
@@ -18,49 +108,46 @@ RUN composer dump-autoload \
     --optimize \
     --classmap-authoritative
 
-FROM php:8.4-apache-bookworm
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        curl \
-        libpq-dev \
-        libzip-dev \
-        libonig-dev \
-        unzip \
-        $PHPIZE_DEPS \
-    && docker-php-ext-install -j"$(nproc)" pdo_pgsql bcmath mbstring zip opcache \
-    && pecl install redis \
-    && docker-php-ext-enable redis \
-    && a2enmod rewrite headers expires \
-    && apt-get purge -y --auto-remove $PHPIZE_DEPS \
-    && rm -rf /var/lib/apt/lists/* /tmp/pear
+# ============================================================
+# CREATE REQUIRED LARAVEL DIRECTORIES
+# ============================================================
 
-ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+RUN mkdir -p \
+    /var/www/html/storage/app/public \
+    /var/www/html/storage/framework/cache/data \
+    /var/www/html/storage/framework/sessions \
+    /var/www/html/storage/framework/views \
+    /var/www/html/storage/logs \
+    /var/www/html/bootstrap/cache
 
-RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf \
-    && sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
-WORKDIR /var/www/html
+# ============================================================
+# PERMISSIONS
+# ============================================================
 
-COPY source/backend/ /var/www/html/
-COPY --from=vendor /app/vendor /var/www/html/vendor
-COPY docker/php/opcache.ini /usr/local/etc/php/conf.d/99-edunova-opcache.ini
-COPY docker/php/php-production.ini /usr/local/etc/php/conf.d/98-edunova-production.ini
+RUN chown -R www-data:www-data \
+        /var/www/html/storage \
+        /var/www/html/bootstrap/cache \
+    && chmod -R 775 \
+        /var/www/html/storage \
+        /var/www/html/bootstrap/cache
+
+
+# ============================================================
+# ENTRYPOINT
+# ============================================================
+
 COPY docker/php/entrypoint.sh /usr/local/bin/edunova-entrypoint
 
-RUN chmod +x /usr/local/bin/edunova-entrypoint \
-    && mkdir -p \
-        storage/app/public \
-        storage/framework/cache/data \
-        storage/framework/sessions \
-        storage/framework/views \
-        storage/logs \
-        bootstrap/cache \
-    && rm -rf public/storage \
-    && ln -s ../storage/app/public public/storage \
-    && chown -R www-data:www-data storage bootstrap/cache
+# Windows CRLF -> Linux LF
+RUN sed -i 's/\r$//' /usr/local/bin/edunova-entrypoint \
+    && chmod +x /usr/local/bin/edunova-entrypoint
+
 
 EXPOSE 80
 
-ENTRYPOINT ["edunova-entrypoint"]
+
+ENTRYPOINT ["/usr/local/bin/edunova-entrypoint"]
+
 CMD ["apache2-foreground"]

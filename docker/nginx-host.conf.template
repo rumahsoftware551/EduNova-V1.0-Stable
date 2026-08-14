@@ -1,20 +1,88 @@
 server {
-    listen 80;
-    listen [::]:80;
-    server_name __DOMAIN__;
 
-    client_max_body_size 70m;
+    listen 80;
+
+    server_name _;
+
+
+    client_max_body_size 64M;
+
+
+    # ========================================================
+    # FRONTEND
+    # ========================================================
 
     location / {
-        proxy_pass http://127.0.0.1:__APP_PORT__;
+
+        proxy_pass http://frontend:80;
+
         proxy_http_version 1.1;
+
         proxy_set_header Host $host;
+
         proxy_set_header X-Real-IP $remote_addr;
+
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_read_timeout 120s;
+
     }
+
+
+    # ========================================================
+    # LARAVEL API
+    # ========================================================
+
+    location /api/ {
+
+        proxy_pass http://backend:80;
+
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+
+        proxy_set_header X-Real-IP $remote_addr;
+
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_set_header X-Forwarded-Host $host;
+
+        proxy_set_header X-Forwarded-Port $server_port;
+
+    }
+
+
+    # ========================================================
+    # LARAVEL STORAGE
+    # ========================================================
+
+    location /storage/ {
+
+        alias /var/www/html/storage/app/public/;
+
+        access_log off;
+
+        expires 7d;
+
+        add_header Cache-Control "public";
+
+    }
+
+
+    # ========================================================
+    # HEALTH CHECK
+    # ========================================================
+
+    location = /health {
+
+        access_log off;
+
+        add_header Content-Type text/plain;
+
+        return 200 "EduNova OK";
+
+    }
+
 }
